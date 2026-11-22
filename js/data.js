@@ -24,11 +24,11 @@ var OP = {
     },
     incline: {
       name: "Flexão inclinada",
-      cue: "Mãos na parede ou numa mesa firme, um pouco mais abertas que os ombros. Corpo reto, peito desce na direção do apoio e você empurra de volta.",
+      cue: "Mãos na parede, um pouco mais abertas que os ombros. Dê um passo atrás e deixe o corpo reto. O peito desce na direção da parede e você empurra de volta.",
       video: "gvoTIZGmcFY",
       videoTitle: "Como fazer flexão inclinada",
-      videoNote: "",
-      search: "flexão inclinada na parede ou mesa como fazer"
+      videoNote: "Faça na parede, em pé. Quanto mais os pés perto da parede, mais fácil.",
+      search: "flexão inclinada na parede como fazer"
     },
     kneePush: {
       name: "Flexão com joelhos",
@@ -39,12 +39,12 @@ var OP = {
       search: "flexão de braço com joelhos apoiados"
     },
     row: {
-      name: "Remada na mesa",
-      cue: "Deite de barriga para cima embaixo de uma mesa firme, que não tombe. Segure a borda, joelhos dobrados e pés no chão. Puxe o peito até perto da mesa e desça devagar. O corpo fica reto dos joelhos aos ombros.",
-      video: "OYUxXMGVuuU",
-      videoTitle: "Remada na mesa",
-      videoNote: "Em inglês. Faça com os joelhos dobrados e os pés no chão. Apoiar os pés numa cadeira deixa o exercício mais difícil.",
-      search: "remada na mesa calistenia sem equipamento"
+      name: "Remada deitada",
+      cue: "Deite de bruços, testa virada para o chão e cotovelos dobrados, no formato de um W. Junte as escápulas e levante só os cotovelos um pouco. Quadril e pernas ficam no chão. Não arqueie a lombar.",
+      video: "CL-lV9E94Fs",
+      videoTitle: "Remada deitada no chão",
+      videoNote: "Em inglês. De bruços, puxe os cotovelos para trás e junte as escápulas. Só o chão.",
+      search: "remada deitada no chão sem equipamento"
     },
     plank: {
       name: "Prancha com joelhos",
