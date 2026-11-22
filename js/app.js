@@ -27,7 +27,8 @@ function blank() {
     weights: {},
     measures: { start: {}, end: {} },
     checks: {},
-    sound: true
+    sound: true,
+    water: { on: false, from: "08:00", to: "21:00", drunk: {}, sent: {} }
   };
 }
 
@@ -44,6 +45,13 @@ function load() {
     };
     base.checks = raw.checks || {};
     base.sound = raw.sound !== false;
+    base.water = {
+      on: !!(raw.water && raw.water.on),
+      from: (raw.water && raw.water.from) || "08:00",
+      to: (raw.water && raw.water.to) || "21:00",
+      drunk: (raw.water && raw.water.drunk) || {},
+      sent: (raw.water && raw.water.sent) || {}
+    };
     Object.keys(base.weights).forEach(function (id) {
       var n = Number(base.weights[id]);
       if (Number.isFinite(n)) base.weights[id] = n;
@@ -576,6 +584,263 @@ function submitSetup() {
   render();
 }
 
+function ensureWater() {
+  if (!state.water) state.water = { on: false, from: "08:00", to: "21:00", drunk: {}, sent: {} };
+  if (!state.water.drunk) state.water.drunk = {};
+  if (!state.water.sent) state.water.sent = {};
+}
+
+function mlPerKg(age) {
+  if (age >= 56) return 30;
+  if (age >= 31) return 33;
+  return 35;
+}
+
+function exerciseWater(date) {
+  var day = parseISO(date).getDay();
+  if (day === 0) return 200;
+  if (day === 6) return 350;
+  return 500;
+}
+
+function exerciseWaterName(extra) {
+  if (extra >= 500) return "do treino de hoje";
+  if (extra >= 350) return "do pedal de hoje";
+  return "da recuperação de hoje";
+}
+
+function fmtL(ml) {
+  var liters = ml / 1000;
+  var tenth = Math.abs(liters * 10 - Math.round(liters * 10)) < 0.001;
+  var digits = tenth ? 1 : 2;
+  return liters.toLocaleString("pt-BR", { minimumFractionDigits: digits, maximumFractionDigits: digits }) + " L";
+}
+
+function fmtHM(ms) {
+  var date = new Date(ms);
+  return String(date.getHours()).padStart(2, "0") + ":" + String(date.getMinutes()).padStart(2, "0");
+}
+
+function waterPlan(date) {
+  var latest = lastWeight();
+  if (!latest || !state.profile) return null;
+  var per = mlPerKg(state.profile.age);
+  var base = Math.round(latest.kg * per / 100) * 100;
+  var extra = exerciseWater(date);
+  var glass = 250;
+  var count = Math.ceil((base + extra) / glass);
+  if (count < 6) count = 6;
+  if (count > 16) count = 16;
+  return {
+    kg: latest.kg,
+    per: per,
+    base: base,
+    extra: extra,
+    glass: glass,
+    count: count,
+    total: count * glass
+  };
+}
+
+function drunkList(date, count) {
+  ensureWater();
+  if (!Array.isArray(state.water.drunk[date])) state.water.drunk[date] = [];
+  var list = state.water.drunk[date];
+  while (list.length < count) list.push(false);
+  if (list.length > count) list.length = count;
+  return list;
+}
+
+function parseHM(value) {
+  var parts = String(value || "08:00").split(":");
+  var hour = Number(parts[0]);
+  var minute = Number(parts[1]);
+  return {
+    h: Number.isFinite(hour) ? hour : 8,
+    m: Number.isFinite(minute) ? minute : 0
+  };
+}
+
+function waterSlots(date, plan) {
+  ensureWater();
+  var from = parseHM(state.water.from);
+  var to = parseHM(state.water.to);
+  var start = parseISO(date);
+  start.setHours(from.h, from.m, 0, 0);
+  var end = parseISO(date);
+  end.setHours(to.h, to.m, 0, 0);
+  if (end.getTime() <= start.getTime()) end = new Date(start.getTime() + 12 * 60 * 60 * 1000);
+  var span = end.getTime() - start.getTime();
+  var slots = [];
+  for (var i = 0; i < plan.count; i += 1) {
+    var at = plan.count === 1 ? start.getTime() : start.getTime() + Math.round(span * i / (plan.count - 1));
+    slots.push({ index: i, at: at });
+  }
+  return slots;
+}
+
+function waterHTML() {
+  var date = todayIso();
+  var plan = waterPlan(date);
+  if (!plan) {
+    return '<section class="card" id="water"><h2>Água de hoje</h2><p>Coloque o peso em Evolução para calcular quanto beber.</p></section>';
+  }
+  ensureWater();
+  var list = drunkList(date, plan.count);
+  var done = list.filter(Boolean).length;
+  var glasses = list.map(function (on, index) {
+    return '<button type="button" class="glass' + (on ? " on" : "") + '" data-act="water-glass" data-index="' + index + '" aria-pressed="' + on + '" aria-label="Copo ' + (index + 1) + " de " + plan.count + '">' + (index + 1) + "</button>";
+  }).join("");
+  var slots = waterSlots(date, plan);
+  var next = null;
+  for (var i = 0; i < slots.length; i += 1) {
+    if (!list[slots[i].index] && slots[i].at >= Date.now() - 60000) {
+      next = slots[i];
+      break;
+    }
+  }
+  var nextLine = next
+    ? "Próximo copo às " + fmtHM(next.at) + "."
+    : (done >= plan.count ? "Meta de hoje fechada." : "Os horários de hoje já passaram.");
+  var remind = state.water.on
+    ? '<button type="button" class="secondary" data-act="water-off">Desligar lembretes</button>'
+    : '<button type="button" class="primary" data-act="water-on">Ativar lembretes</button>';
+  return '<section class="card" id="water">' +
+    "<h2>Água de hoje</h2>" +
+    '<p class="water-total">' + fmtL(plan.total) + "</p>" +
+    '<p class="small">' + fmtPlain(plan.kg) + " kg × " + plan.per + " ml = " + fmtL(plan.base) + ". Mais " + fmtL(plan.extra) + " " + exerciseWaterName(plan.extra) + ". Arredondado em copos de 250 ml.</p>" +
+    '<div class="glasses">' + glasses + "</div>" +
+    '<p class="bar-label">' + fmtL(done * plan.glass) + " bebidos · faltam " + fmtL((plan.count - done) * plan.glass) + "</p>" +
+    '<div class="row-2">' +
+      '<label class="small">Primeiro aviso<input id="water-from" type="time" value="' + esc(state.water.from) + '"></label>' +
+      '<label class="small">Último aviso<input id="water-to" type="time" value="' + esc(state.water.to) + '"></label>' +
+    "</div>" +
+    remind +
+    '<p class="small muted">' + nextLine + " Cada aviso é um copo de " + plan.glass + " ml. O aviso chega na hora com o Operação 30 aberto. Com o app fechado, o Android pode entregar se o sistema deixar; no iPhone, o que ficou pendente aparece quando você abre o app. Estimativa, não é receita médica.</p>" +
+  "</section>";
+}
+
+function paintWater() {
+  var current = document.getElementById("water");
+  if (!current) return;
+  current.outerHTML = waterHTML();
+}
+
+function showWaterNotice(body) {
+  var options = {
+    body: body,
+    icon: "icons/icon-192.png",
+    badge: "icons/favicon-32.png",
+    tag: "agua",
+    renotify: true,
+    lang: "pt-BR",
+    data: { url: "./" }
+  };
+  if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+    navigator.serviceWorker.ready.then(function (reg) {
+      return reg.showNotification("Hora da água", options);
+    }).catch(function () {
+      if (typeof Notification !== "undefined" && Notification.permission === "granted") new Notification("Hora da água", options);
+    });
+    return;
+  }
+  if (typeof Notification !== "undefined" && Notification.permission === "granted") new Notification("Hora da água", options);
+}
+
+function updateWaterBadge(plan, date) {
+  if (!navigator.setAppBadge) return;
+  var left = plan.count - drunkList(date, plan.count).filter(Boolean).length;
+  var action = left > 0 ? navigator.setAppBadge(left) : (navigator.clearAppBadge ? navigator.clearAppBadge() : Promise.resolve());
+  if (action && action.catch) action.catch(function () {});
+}
+
+function scheduleSystemWater(date, plan) {
+  if (typeof TimestampTrigger === "undefined" || !navigator.serviceWorker) return;
+  navigator.serviceWorker.ready.then(function (reg) {
+    waterSlots(date, plan).forEach(function (slot) {
+      if (slot.at <= Date.now()) return;
+      reg.showNotification("Hora da água", {
+        body: "Beba " + plan.glass + " ml. Meta de hoje: " + fmtL(plan.total) + ".",
+        icon: "icons/icon-192.png",
+        badge: "icons/favicon-32.png",
+        tag: "agua-" + date + "-" + slot.index,
+        showTrigger: new TimestampTrigger(slot.at),
+        data: { url: "./" }
+      }).catch(function () {});
+    });
+  }).catch(function () {});
+}
+
+var waterTimer = null;
+
+function armWater() {
+  if (waterTimer) clearTimeout(waterTimer);
+  if (!state.profile || !state.water || !state.water.on) return;
+  if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+  var date = todayIso();
+  var plan = waterPlan(date);
+  if (!plan) return;
+  ensureWater();
+  if (!state.water.sent[date]) state.water.sent[date] = {};
+  var list = drunkList(date, plan.count);
+  var slots = waterSlots(date, plan);
+  var now = Date.now();
+  var due = null;
+  var changed = false;
+  slots.forEach(function (slot) {
+    if (list[slot.index] || state.water.sent[date][slot.index]) return;
+    if (slot.at <= now && now - slot.at < 50 * 60 * 1000) due = slot;
+    if (slot.at <= now) {
+      state.water.sent[date][slot.index] = true;
+      changed = true;
+    }
+  });
+  if (due) {
+    var done = list.filter(Boolean).length;
+    showWaterNotice("Beba " + plan.glass + " ml. Hoje: " + fmtL(done * plan.glass) + " de " + fmtL(plan.total) + ".");
+  }
+  if (changed) save();
+  var upcoming = null;
+  for (var i = 0; i < slots.length; i += 1) {
+    if (!list[slots[i].index] && !state.water.sent[date][slots[i].index] && slots[i].at > now) {
+      upcoming = slots[i];
+      break;
+    }
+  }
+  if (!upcoming) return;
+  var wait = Math.min(upcoming.at - now, 30 * 60 * 1000);
+  waterTimer = setTimeout(armWater, Math.max(1000, wait + 200));
+}
+
+function enableWaterReminders() {
+  ensureWater();
+  if (typeof Notification === "undefined") {
+    window.alert("Este celular não deixou o aplicativo enviar aviso. Os copos continuam aqui para marcar.");
+    return;
+  }
+  Notification.requestPermission().then(function (result) {
+    state.water.on = result === "granted";
+    save();
+    paintWater();
+    if (result !== "granted") {
+      window.alert("Para o lembrete aparecer, permita as notificações do Operação 30 nas configurações do celular.");
+      return;
+    }
+    var date = todayIso();
+    var plan = waterPlan(date);
+    if (plan) {
+      scheduleSystemWater(date, plan);
+      updateWaterBadge(plan, date);
+    }
+    if (navigator.serviceWorker) {
+      navigator.serviceWorker.ready.then(function (reg) {
+        if (reg.periodicSync) reg.periodicSync.register("agua", { minInterval: 60 * 60 * 1000 }).catch(function () {});
+      }).catch(function () {});
+    }
+    armWater();
+  });
+}
+
 function renderToday() {
   var date = activeIso();
   var day = dayNumber(date);
@@ -628,6 +893,7 @@ function renderToday() {
       banner +
       '<div class="list">' + cards + "</div>" +
       action +
+      waterHTML() +
       '<p class="safety">Não force articulação e não treine com dor. Dor no peito, tontura ou falta de ar diferente do esforço: pare.</p>' +
     "</div>"
   );
@@ -1055,6 +1321,32 @@ function onClick(event) {
     finishBlock();
   }
   if (act === "timer-back") leaveTimer();
+  if (act === "water-glass") {
+    var waterDate = todayIso();
+    var plan = waterPlan(waterDate);
+    if (!plan) return;
+    var list = drunkList(waterDate, plan.count);
+    var glassIndex = Number(button.getAttribute("data-index"));
+    list[glassIndex] = !list[glassIndex];
+    save();
+    paintWater();
+    updateWaterBadge(plan, waterDate);
+    if (navigator.vibrate) navigator.vibrate(12);
+    return;
+  }
+  if (act === "water-on") {
+    enableWaterReminders();
+    return;
+  }
+  if (act === "water-off") {
+    ensureWater();
+    state.water.on = false;
+    save();
+    if (waterTimer) clearTimeout(waterTimer);
+    if (navigator.clearAppBadge) navigator.clearAppBadge().catch(function () {});
+    paintWater();
+    return;
+  }
   if (act === "reset") {
     if (!confirm("Apagar o perfil, os treinos e os pesos salvos neste celular?")) return;
     localStorage.removeItem(KEY);
@@ -1068,6 +1360,21 @@ function onClick(event) {
 }
 
 app.addEventListener("click", onClick);
+app.addEventListener("change", function (event) {
+  if (event.target.id !== "water-from" && event.target.id !== "water-to") return;
+  ensureWater();
+  var from = document.getElementById("water-from");
+  var to = document.getElementById("water-to");
+  if (from && from.value) state.water.from = from.value;
+  if (to && to.value) state.water.to = to.value;
+  var waterDate = todayIso();
+  state.water.sent[waterDate] = {};
+  save();
+  paintWater();
+  var plan = waterPlan(waterDate);
+  if (state.water.on && plan) scheduleSystemWater(waterDate, plan);
+  armWater();
+});
 app.addEventListener("submit", function (event) {
   event.preventDefault();
   if (event.target.id === "setup-form") submitSetup();
@@ -1080,6 +1387,7 @@ sheet.addEventListener("click", function (event) {
 
 document.addEventListener("visibilitychange", function () {
   if (document.visibilityState === "visible" && timer.phase === "run") lockScreen();
+  if (document.visibilityState === "visible") armWater();
 });
 
 setInterval(tick, 200);
@@ -1088,4 +1396,11 @@ if ("serviceWorker" in navigator && location.protocol.indexOf("http") === 0) {
   navigator.serviceWorker.register("sw.js").catch(function () {});
 }
 
+if (navigator.serviceWorker) {
+  navigator.serviceWorker.addEventListener("message", function (event) {
+    if (event.data && event.data.type === "water-check") armWater();
+  });
+}
+
 render();
+armWater();

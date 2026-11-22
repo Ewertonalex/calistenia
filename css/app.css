@@ -155,6 +155,55 @@ h2 {
   line-height: 1.4;
 }
 
+.water-total {
+  margin-top: 6px;
+  font-size: 40px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  color: var(--green);
+}
+
+.glasses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.glass {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border-radius: 12px;
+  border: 2px solid var(--green);
+  background: transparent;
+  color: var(--green);
+  font-size: 15px;
+  font-weight: 800;
+  padding: 0;
+}
+
+.glass.on {
+  background: var(--green);
+  color: var(--green-ink);
+}
+
+#water .row-2 { margin-top: 12px; }
+#water .row-2 label { display: block; font-weight: 700; }
+#water input[type="time"] {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 4px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #0c0f0d;
+  color: var(--white);
+  font-size: 16px;
+}
+#water .primary, #water .secondary { margin-top: 12px; }
+
 .list {
   display: grid;
   gap: 10px;
