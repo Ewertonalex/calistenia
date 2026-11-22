@@ -40,11 +40,11 @@ var OP = {
     },
     row: {
       name: "Remada deitada",
-      cue: "Deite de bruços, testa virada para o chão e cotovelos dobrados, no formato de um W. Junte as escápulas e levante só os cotovelos um pouco. Quadril e pernas ficam no chão. Não arqueie a lombar.",
-      video: "CL-lV9E94Fs",
-      videoTitle: "Remada deitada no chão",
-      videoNote: "Em inglês. De bruços, puxe os cotovelos para trás e junte as escápulas. Só o chão.",
-      search: "remada deitada no chão sem equipamento"
+      cue: "Deite de bruços, testa virada para o chão e mãos vazias. Cotovelos dobrados, no formato de um W. Junte as escápulas e levante só os cotovelos um pouco. Quadril e pernas ficam no chão. Sem peso e sem aparelho.",
+      video: "QdGTI4Lshg4",
+      videoTitle: "Y, T e W no chão, sem peso",
+      videoNote: "Em inglês. Mãos vazias, deitado no chão. O movimento do treino é o W, o último, com os cotovelos dobrados. Não pegue peso.",
+      search: "Y T W deitado no chão sem peso"
     },
     plank: {
       name: "Prancha com joelhos",
