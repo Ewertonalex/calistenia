@@ -1,4 +1,4 @@
-var CACHE = "op30-v5";
+var CACHE = "op30-v6";
 var FILES = [
   "./",
   "./index.html",

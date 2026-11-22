@@ -15,7 +15,9 @@ var timer = {
   phase: "idle",
   running: false,
   switchEnds: 0,
-  lastBeep: null
+  lastBeep: null,
+  steps: [],
+  step: 0
 };
 
 var app = document.getElementById("app");
@@ -191,7 +193,7 @@ function doseText(block, week) {
   var dose = block.dose || { kind: "note", text: "" };
   if (dose.kind === "sets") {
     var extra = week === 1 ? 0 : week === 4 ? 4 : 2;
-    return dose.sets + " séries de " + (dose.reps + extra);
+    return dose.sets + " séries de " + (dose.reps + extra) + ". O relógio separa a série e o descanso.";
   }
   if (dose.kind === "plank") {
     if (week <= 2) return "2 séries de 15 segundos. Descanse entre elas.";
@@ -317,6 +319,73 @@ function playTick() {
   play([{ f: 988, at: 0, d: 0.07, g: 0.04 }]);
 }
 
+function playRest() {
+  play([{ f: 392, at: 0, d: 0.18, g: 0.06 }]);
+  buzz([40]);
+}
+
+function phasesFor(block, week) {
+  var dose = block.dose || {};
+  if (dose.kind === "sets") {
+    var sets = dose.sets || 2;
+    var work = dose.work || 40;
+    var rest = dose.rest || 40;
+    var phases = [];
+    for (var i = 0; i < sets; i += 1) {
+      phases.push({ kind: "work", sec: work, set: i + 1, sets: sets });
+      if (i < sets - 1) phases.push({ kind: "rest", sec: rest, set: i + 1, sets: sets });
+    }
+    return phases;
+  }
+  if (dose.kind === "plank") {
+    var hold = week <= 2 ? 15 : week === 3 ? 25 : 30;
+    var pause = week <= 2 ? 45 : week === 3 ? 35 : 30;
+    return [
+      { kind: "work", sec: hold, set: 1, sets: 2 },
+      { kind: "rest", sec: pause, set: 1, sets: 2 },
+      { kind: "work", sec: hold, set: 2, sets: 2 },
+      { kind: "rest", sec: pause, set: 2, sets: 2 }
+    ];
+  }
+  if (dose.kind === "interval") {
+    var rounds = [];
+    for (var round = 1; round <= 3; round += 1) {
+      rounds.push({ kind: "work", sec: 60, set: round, sets: 3, label: "Minuto firme" });
+      rounds.push({ kind: "rest", sec: 60, set: round, sets: 3, label: "Minuto leve" });
+    }
+    return rounds;
+  }
+  return [{ kind: "work", sec: block.sec, set: 1, sets: 1 }];
+}
+
+function prepareSteps() {
+  var block = currentBlock();
+  var week = weekOf(dayNumber(timer.date));
+  timer.steps = block ? phasesFor(block, week) : [{ kind: "work", sec: 1, set: 1, sets: 1 }];
+  timer.step = 0;
+  timer.left = timer.steps[0].sec * 1000;
+}
+
+function currentStep() {
+  if (timer.steps && timer.steps[timer.step]) return timer.steps[timer.step];
+  var block = timer.date ? currentBlock() : null;
+  return { kind: "work", sec: block ? block.sec : 1, set: 1, sets: 1 };
+}
+
+function stepDose(block, week) {
+  var step = currentStep();
+  if (step.kind === "rest") {
+    if (step.label) return step.label + ". Recupere a respiração. A próxima parte começa sozinha.";
+    if (step.set >= step.sets) return "Recupere a respiração. O próximo exercício começa sozinho.";
+    return "Descanso. Solte o corpo e respire. A próxima série começa sozinha.";
+  }
+  if (step.label) return step.label + ". " + doseText(block, week);
+  if (step.sets > 1 && block.dose && (block.dose.kind === "sets" || block.dose.kind === "plank")) {
+    return "Série " + step.set + " de " + step.sets + ". " + doseText(block, week);
+  }
+  return doseText(block, week);
+}
+
 function buzz(pattern) {
   if (!state.sound || !navigator.vibrate) return;
   navigator.vibrate(pattern);
@@ -341,11 +410,11 @@ function currentBlock() {
 }
 
 function openTimer(date, index, auto) {
-  var same = timer.date === date && timer.index === index && (timer.phase === "pause" || timer.phase === "idle");
+  var same = timer.date === date && timer.index === index && (timer.phase === "pause" || timer.phase === "idle") && timer.steps && timer.steps.length;
   if (!same) {
     timer.date = date;
     timer.index = index;
-    timer.left = workoutOf(date).blocks[index].sec * 1000;
+    prepareSteps();
     timer.phase = "idle";
     timer.lastBeep = null;
   }
@@ -360,8 +429,12 @@ function startRun() {
   if (timer.phase === "run" || timer.phase === "done") return;
   var block = currentBlock();
   if (!block) return;
-  if (timer.phase !== "pause") timer.left = block.sec * 1000;
-  playStart();
+  if (timer.phase !== "pause") {
+    if (!timer.steps || !timer.steps.length) prepareSteps();
+    timer.left = currentStep().sec * 1000;
+  }
+  if (currentStep().kind === "rest") playRest();
+  else playStart();
   timer.phase = "run";
   timer.endsAt = Date.now() + timer.left;
   timer.lastBeep = null;
@@ -381,7 +454,7 @@ function pauseTimer() {
   if (timer.phase === "switch") {
     timer.phase = "idle";
     timer.running = false;
-    timer.left = currentBlock().sec * 1000;
+    timer.left = currentStep().sec * 1000;
     render();
   }
 }
@@ -401,7 +474,7 @@ function finishBlock() {
     return;
   }
   timer.index += 1;
-  timer.left = blocks[timer.index].sec * 1000;
+  prepareSteps();
   timer.phase = "switch";
   timer.switchEnds = Date.now() + 1600;
   timer.running = true;
@@ -436,7 +509,20 @@ function tick() {
     playTick();
   }
   updateClock();
-  if (left <= 0) finishBlock();
+  if (left > 0) return;
+  var steps = timer.steps || [];
+  if (timer.step < steps.length - 1) {
+    timer.step += 1;
+    var next = timer.steps[timer.step];
+    timer.left = next.sec * 1000;
+    timer.endsAt = Date.now() + timer.left;
+    timer.lastBeep = null;
+    if (next.kind === "rest") playRest();
+    else playStart();
+    render();
+    return;
+  }
+  finishBlock();
 }
 
 function updateClock() {
@@ -445,7 +531,7 @@ function updateClock() {
   if (!clock || !ring) return;
   var block = currentBlock();
   if (!block) return;
-  var total = block.sec * 1000;
+  var total = currentStep().sec * 1000 || 1;
   var left = timer.phase === "run" ? Math.max(0, timer.endsAt - Date.now()) : timer.left;
   clock.textContent = fmtClock(left);
   var length = 2 * Math.PI * 90;
@@ -522,7 +608,7 @@ function renderSetup() {
         field("Altura (cm)", "s-height", "text", "170", "decimal") +
         field("Peso de hoje (kg)", "s-weight", "text", "80,5", "decimal") +
         field("Começar em", "s-start", "date", "", "") +
-        '<p class="lead">O treino segue o dia da semana. Segunda é peito e braços. Domingo é recuperação. Se hoje for domingo, o dia 1 começa leve.</p>' +
+        '<p class="lead">O treino segue o dia da semana. Segunda é peito, costas e braços. Domingo é recuperação. Se hoje for domingo, o dia 1 começa leve.</p>' +
         '<div class="card" id="s-bmi"><p class="muted">O IMC aparece quando peso e altura estiverem preenchidos.</p></div>' +
         '<p class="error" id="s-err"></p>' +
         '<button class="primary" type="submit">Começar</button>' +
@@ -716,7 +802,7 @@ function waterHTML() {
       '<label class="small">Último aviso<input id="water-to" type="time" value="' + esc(state.water.to) + '"></label>' +
     "</div>" +
     remind +
-    '<p class="small muted">' + nextLine + " Cada aviso é um copo de " + plan.glass + " ml. O aviso chega na hora com o Operação 30 aberto. Com o app fechado, o Android pode entregar se o sistema deixar; no iPhone, o que ficou pendente aparece quando você abre o app. Estimativa, não é receita médica.</p>" +
+    '<p class="small muted">' + nextLine + " Cada aviso é um copo de " + plan.glass + " ml. Com o app aberto, o aviso chega na hora. No Android ele também pode chegar com o app fechado, se o sistema deixar. Estimativa, não é receita médica.</p>" +
   "</section>";
 }
 
@@ -930,12 +1016,20 @@ function renderTimer() {
     );
     return;
   }
-  var phaseLabel = timer.phase === "switch" ? "A seguir" : timer.phase === "pause" ? "Pausado" : timer.phase === "run" ? "Em andamento" : "Pronto";
+  var step = currentStep();
+  var resting = step.kind === "rest" && timer.phase !== "switch";
+  var phaseLabel = "Pronto";
+  if (timer.phase === "switch") phaseLabel = "A seguir";
+  else if (resting && timer.phase === "pause") phaseLabel = "Descanso pausado";
+  else if (resting) phaseLabel = "Descanso";
+  else if (timer.phase === "pause") phaseLabel = "Pausado";
+  else if (step.sets > 1) phaseLabel = "Série " + step.set + " de " + step.sets;
+  else if (timer.phase === "run") phaseLabel = "Em andamento";
   var canStart = timer.phase === "idle" || timer.phase === "pause" || timer.phase === "switch";
   var canPause = timer.phase === "run" || timer.phase === "switch";
   var canFinish = timer.phase === "idle" || timer.phase === "run" || timer.phase === "pause";
   shell(
-    '<div class="timer">' +
+    '<div class="timer' + (resting ? " resting" : "") + '">' +
       '<div class="timer-top"><button type="button" class="icon-btn" data-act="timer-back" aria-label="Voltar">' + backIcon() + "</button>" +
       soundButton() + "</div>" +
       '<p class="kicker">' + phaseLabel + " · " + (timer.index + 1) + " de " + workout.blocks.length + "</p>" +
@@ -944,7 +1038,7 @@ function renderTimer() {
         '<circle class="ring-bg" cx="110" cy="110" r="90"></circle>' +
         '<circle id="ring" class="ring-fg" cx="110" cy="110" r="90" transform="rotate(-90 110 110)"></circle>' +
       '</svg><div id="clock">' + fmtClock(timer.left) + "</div></div>" +
-      '<p class="dose">' + esc(doseText(block, week)) + "</p>" +
+      '<p class="dose">' + esc(stepDose(block, week)) + "</p>" +
       '<p class="cue">' + esc(OP.exercises[block.ex].cue) + "</p>" +
       '<button type="button" class="video-link" data-act="video" data-ex="' + block.ex + '">Ver como fazer</button>' +
       '<div class="controls">' +
@@ -1400,6 +1494,16 @@ if (navigator.serviceWorker) {
   navigator.serviceWorker.addEventListener("message", function (event) {
     if (event.data && event.data.type === "water-check") armWater();
   });
+}
+
+function hideNetlifyBadge() {
+  var frame = document.getElementById("nl-badge-frame");
+  if (frame && frame.parentNode) frame.parentNode.removeChild(frame);
+}
+
+hideNetlifyBadge();
+if (window.MutationObserver) {
+  new MutationObserver(hideNetlifyBadge).observe(document.documentElement, { childList: true, subtree: true });
 }
 
 render();

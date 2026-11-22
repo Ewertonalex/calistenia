@@ -38,6 +38,14 @@ var OP = {
       videoNote: "",
       search: "flexão de braço com joelhos apoiados"
     },
+    row: {
+      name: "Remada na mesa",
+      cue: "Deite de barriga para cima embaixo de uma mesa firme, que não tombe. Segure a borda, joelhos dobrados e pés no chão. Puxe o peito até perto da mesa e desça devagar. O corpo fica reto dos joelhos aos ombros.",
+      video: "OYUxXMGVuuU",
+      videoTitle: "Remada na mesa",
+      videoNote: "Em inglês. Faça com os joelhos dobrados e os pés no chão. Apoiar os pés numa cadeira deixa o exercício mais difícil.",
+      search: "remada na mesa calistenia sem equipamento"
+    },
     plank: {
       name: "Prancha com joelhos",
       cue: "Joelhos e mãos no chão. Corpo reto, abdômen firme. Não deixe o quadril cair nem subir. Respire durante a sustentação.",
@@ -49,9 +57,9 @@ var OP = {
     squat: {
       name: "Agachamento",
       cue: "Pés na largura do quadril. Mande o quadril para trás, como se fosse sentar. Os joelhos acompanham a ponta dos pés.",
-      video: "CaTbpJH49i4",
-      videoTitle: "Agachamento para iniciante",
-      videoNote: "O vídeo explica o movimento com barra. Faça sem peso, só com o corpo.",
+      video: "8uoaYwS6iFM",
+      videoTitle: "Agachamento com o peso do corpo",
+      videoNote: "Em inglês. O movimento é só com o corpo, sem barra.",
       search: "agachamento com peso do corpo para iniciante"
     },
     calf: {
@@ -65,9 +73,9 @@ var OP = {
     bridge: {
       name: "Ponte de glúteos",
       cue: "Deite com os joelhos dobrados e os pés no chão. Empurre os calcanhares, suba o quadril e aperte os glúteos. Não arqueie a lombar.",
-      video: "MmSS_G86rfk",
+      video: "wPM8icPu6H8",
       videoTitle: "Ponte de glúteos",
-      videoNote: "O primeiro exercício do vídeo é a ponte. Suba até o joelho, o quadril e o ombro ficarem alinhados.",
+      videoNote: "Em inglês. Faça com os dois pés no chão. A variação de uma perna aparece no final.",
       search: "ponte de glúteos como fazer no chão"
     },
     crunch: {
@@ -89,33 +97,33 @@ var OP = {
     march: {
       name: "Polichinelo sem salto",
       cue: "Marche no lugar, sem sair do chão em salto. Os joelhos sobem, os braços acompanham e o tronco fica ereto.",
-      video: "7U8FMLlwItc",
+      video: "u1gmWFvEluM",
       videoTitle: "Marcha no lugar",
-      videoNote: "Vídeo em inglês. A marcha sem salto aparece logo no começo.",
+      videoNote: "Em inglês. Marche sem sair do chão. Os joelhos sobem para a frente.",
       search: "marcha no lugar sem pulo exercício"
     },
     mobility: {
       name: "Mobilidade",
       cue: "Em pé, faça círculos lentos com os ombros. Depois, mãos na cintura e círculos com o quadril. Movimento confortável, sem dor.",
-      video: "TDo4HU60IXY",
+      video: "dERa5jKsrZ4",
       videoTitle: "Mobilidade de quadril e ombros",
-      videoNote: "Vídeo em inglês, em ritmo lento. Use só a amplitude que não dói.",
+      videoNote: "Em inglês. Faça os círculos de ombro e os de quadril, devagar e sem dor.",
       search: "mobilidade de quadril e ombros para iniciante"
     },
     stretch: {
       name: "Alongamento leve",
       cue: "Alongue peito, posterior da coxa e quadril. Segure cada posição sem dor, respirando fundo.",
-      video: "TDo4HU60IXY",
-      videoTitle: "Alongamento leve",
-      videoNote: "Vídeo em inglês. Não force a posição.",
+      video: "0t5qTEDSGP4",
+      videoTitle: "Alongamento de peito, quadril e posterior",
+      videoNote: "Em inglês. Use o alongamento de peito na parede, o quadril e o posterior da coxa. Segure sem dor.",
       search: "alongamento leve para iniciante em casa"
     },
     walk: {
       name: "Caminhada tranquila",
       cue: "Caminhe pela casa sem pressa. Se preferir, pedale no ritmo mais leve da bicicleta.",
-      video: "NwwDBARCGgo",
-      videoTitle: "Caminhada ou pedal leve",
-      videoNote: "Se for pedalar, fica no ritmo em que a conversa sai fácil.",
+      video: "bO6NNfX_1ns",
+      videoTitle: "Caminhada em casa",
+      videoNote: "Em inglês. Caminhe no seu ritmo. Se preferir a bicicleta, use o vídeo de postura do pedal.",
       search: "caminhada leve em casa"
     }
   },
@@ -130,14 +138,15 @@ var OP = {
       ]
     },
     {
-      title: "Peito, braços e ombros",
-      focus: "Força de cima e bicicleta",
+      title: "Peito, costas e braços",
+      focus: "Força de cima, remada e bicicleta",
       blocks: [
         { ex: "bike", label: "Bicicleta leve", sec: 120, dose: { kind: "bike", level: "leve" } },
-        { ex: "incline", sec: 120, dose: { kind: "note", text: "Séries curtas na parede ou na mesa. Descanse entre elas.", progress: true } },
-        { ex: "kneePush", sec: 120, dose: { kind: "note", text: "Séries curtas, com os joelhos no chão. Descanse entre elas.", progress: true } },
+        { ex: "incline", sec: 120, dose: { kind: "sets", sets: 2, reps: 8, work: 40, rest: 40 } },
+        { ex: "kneePush", sec: 120, dose: { kind: "sets", sets: 2, reps: 6, work: 40, rest: 40 } },
+        { ex: "row", sec: 120, dose: { kind: "sets", sets: 2, reps: 8, work: 40, rest: 40 } },
         { ex: "plank", sec: 120, dose: { kind: "plank" } },
-        { ex: "bike", label: "Bicicleta moderada", sec: 300, dose: { kind: "bike", level: "moderada" } },
+        { ex: "bike", label: "Bicicleta moderada", sec: 180, dose: { kind: "bike", level: "moderada" } },
         { ex: "bike", label: "Pedalada leve", sec: 120, dose: { kind: "bike", level: "solta" } }
       ]
     },
@@ -146,9 +155,9 @@ var OP = {
       focus: "Força de baixo e bicicleta",
       blocks: [
         { ex: "bike", label: "Bicicleta leve", sec: 120, dose: { kind: "bike", level: "leve" } },
-        { ex: "squat", sec: 120, dose: { kind: "sets", sets: 2, reps: 10 } },
-        { ex: "calf", sec: 120, dose: { kind: "sets", sets: 2, reps: 12 } },
-        { ex: "bridge", sec: 120, dose: { kind: "sets", sets: 2, reps: 10 } },
+        { ex: "squat", sec: 120, dose: { kind: "sets", sets: 2, reps: 10, work: 40, rest: 40 } },
+        { ex: "calf", sec: 120, dose: { kind: "sets", sets: 2, reps: 12, work: 40, rest: 40 } },
+        { ex: "bridge", sec: 120, dose: { kind: "sets", sets: 2, reps: 10, work: 40, rest: 40 } },
         { ex: "bike", label: "Bicicleta moderada", sec: 300, dose: { kind: "bike", level: "moderada" } },
         { ex: "bike", label: "Pedalada leve", sec: 120, dose: { kind: "bike", level: "solta" } }
       ]
@@ -158,8 +167,8 @@ var OP = {
       focus: "Centro do corpo e bicicleta",
       blocks: [
         { ex: "bike", label: "Bicicleta leve", sec: 120, dose: { kind: "bike", level: "leve" } },
-        { ex: "crunch", sec: 120, dose: { kind: "sets", sets: 2, reps: 10 } },
-        { ex: "deadbug", sec: 120, dose: { kind: "sets", sets: 2, reps: 8 } },
+        { ex: "crunch", sec: 120, dose: { kind: "sets", sets: 2, reps: 10, work: 40, rest: 40 } },
+        { ex: "deadbug", sec: 120, dose: { kind: "sets", sets: 2, reps: 8, work: 40, rest: 40 } },
         { ex: "plank", sec: 120, dose: { kind: "plank" } },
         { ex: "bike", label: "Bicicleta moderada", sec: 300, dose: { kind: "bike", level: "moderada" } },
         { ex: "bike", label: "Pedalada leve", sec: 120, dose: { kind: "bike", level: "solta" } }
@@ -180,13 +189,14 @@ var OP = {
       title: "Corpo inteiro",
       focus: "Força geral e bicicleta",
       blocks: [
-        { ex: "bike", label: "Bicicleta leve", sec: 120, dose: { kind: "bike", level: "leve" } },
-        { ex: "incline", sec: 120, dose: { kind: "note", text: "Séries curtas. Descanse entre elas.", progress: true } },
-        { ex: "squat", sec: 120, dose: { kind: "note", text: "Séries curtas. Quadril para trás e joelhos na direção dos pés.", progress: true } },
-        { ex: "bridge", sec: 120, dose: { kind: "note", text: "Séries curtas. Aperte os glúteos no alto.", progress: true } },
-        { ex: "deadbug", sec: 120, dose: { kind: "note", text: "Séries curtas. Lombar colada no chão.", progress: true } },
+        { ex: "bike", label: "Bicicleta leve", sec: 90, dose: { kind: "bike", level: "leve" } },
+        { ex: "incline", sec: 90, dose: { kind: "sets", sets: 2, reps: 6, work: 30, rest: 30 } },
+        { ex: "row", sec: 90, dose: { kind: "sets", sets: 2, reps: 6, work: 30, rest: 30 } },
+        { ex: "squat", sec: 90, dose: { kind: "sets", sets: 2, reps: 8, work: 30, rest: 30 } },
+        { ex: "bridge", sec: 90, dose: { kind: "sets", sets: 2, reps: 8, work: 30, rest: 30 } },
+        { ex: "deadbug", sec: 90, dose: { kind: "sets", sets: 2, reps: 6, work: 30, rest: 30 } },
         { ex: "bike", label: "Bicicleta moderada", sec: 180, dose: { kind: "bike", level: "moderada" } },
-        { ex: "bike", label: "Pedalada leve", sec: 120, dose: { kind: "bike", level: "solta" } }
+        { ex: "bike", label: "Pedalada leve", sec: 180, dose: { kind: "bike", level: "solta" } }
       ]
     },
     {
@@ -206,5 +216,11 @@ var OP = {
   OP.workouts.forEach(function (workout, index) {
     var sum = workout.blocks.reduce(function (total, block) { return total + block.sec; }, 0);
     if (sum !== 900) console.warn("Treino", index, "não soma 15 min:", sum);
+    workout.blocks.forEach(function (block) {
+      var dose = block.dose;
+      if (!dose || dose.kind !== "sets") return;
+      var total = dose.sets * dose.work + (dose.sets - 1) * dose.rest;
+      if (total !== block.sec) console.warn("Treino", index, block.ex, "série e descanso não fecham", total);
+    });
   });
 })();

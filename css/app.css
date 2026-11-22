@@ -315,9 +315,17 @@ h2 {
   line-height: 1.4;
 }
 
+#nl-badge-frame {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
 nav {
   position: fixed;
-  z-index: 5;
+  z-index: 20;
   left: 50%;
   bottom: 0;
   transform: translateX(-50%);
@@ -552,6 +560,9 @@ details li { margin: 6px 0; line-height: 1.35; }
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
+
+.timer.resting .kicker { color: var(--white); }
+.timer.resting .ring-fg { stroke: var(--white); }
 
 .clock-wrap {
   position: relative;
