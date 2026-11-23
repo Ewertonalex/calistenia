@@ -30,7 +30,7 @@ function blank() {
     measures: { start: {}, end: {} },
     checks: {},
     sound: true,
-    water: { on: false, from: "08:00", to: "21:00", drunk: {}, sent: {} }
+    water: { on: false, from: "08:00", to: "21:00", drunk: {}, sent: {}, marks: {}, clears: {} }
   };
 }
 
@@ -52,8 +52,11 @@ function load() {
       from: (raw.water && raw.water.from) || "08:00",
       to: (raw.water && raw.water.to) || "21:00",
       drunk: (raw.water && raw.water.drunk) || {},
-      sent: (raw.water && raw.water.sent) || {}
+      sent: (raw.water && raw.water.sent) || {},
+      marks: (raw.water && raw.water.marks) || {},
+      clears: (raw.water && raw.water.clears) || {}
     };
+    applyWaterMarks(base.water);
     Object.keys(base.weights).forEach(function (id) {
       var n = Number(base.weights[id]);
       if (Number.isFinite(n)) base.weights[id] = n;
@@ -65,12 +68,59 @@ function load() {
   return base;
 }
 
-function save() {
+var waterWrite = Promise.resolve();
+
+function writeLocal() {
   try {
     localStorage.setItem(KEY, JSON.stringify(state));
   } catch (error) {
     /* o aparelho pode bloquear o armazenamento; a tela segue usável nesta sessão */
   }
+}
+
+function save() {
+  writeLocal();
+  mirrorWater();
+}
+
+function mirrorWater() {
+  if (!state.water || !window.indexedDB) return waterWrite;
+  ensureWater();
+  applyWaterMarks(state.water);
+  var snapshot = JSON.parse(JSON.stringify(state.water));
+  waterWrite = waterWrite.then(function () {
+    return readWaterRecord();
+  }).then(function (stored) {
+    if (stored) {
+      snapshot.marks = mergeMarkMaps(snapshot.marks, stored.marks);
+      snapshot.clears = mergeMarkMaps(snapshot.clears, stored.clears);
+      snapshot.sent = mergeSent(snapshot.sent, stored.sent);
+      applyWaterMarks(snapshot);
+      state.water.marks = snapshot.marks;
+      state.water.clears = snapshot.clears;
+      state.water.drunk = snapshot.drunk;
+      state.water.sent = snapshot.sent;
+      writeLocal();
+    }
+    return writeWaterRecord(snapshot);
+  }).catch(function () {});
+  return waterWrite;
+}
+
+function pullWaterMirror() {
+  if (!state.profile || !state.water || !window.indexedDB) return Promise.resolve();
+  return readWaterRecord().then(function (stored) {
+    if (!stored) return;
+    ensureWater();
+    state.water.marks = mergeMarkMaps(state.water.marks, stored.marks);
+    state.water.clears = mergeMarkMaps(state.water.clears, stored.clears);
+    state.water.sent = mergeSent(state.water.sent, stored.sent);
+    applyWaterMarks(state.water);
+    writeLocal();
+    if (document.getElementById("water")) paintWater();
+    var plan = waterPlan(todayIso());
+    if (plan) updateWaterBadge(plan, todayIso());
+  }).catch(function () {});
 }
 
 function parseNum(value) {
@@ -671,9 +721,20 @@ function submitSetup() {
 }
 
 function ensureWater() {
-  if (!state.water) state.water = { on: false, from: "08:00", to: "21:00", drunk: {}, sent: {} };
+  if (!state.water) state.water = { on: false, from: "08:00", to: "21:00", drunk: {}, sent: {}, marks: {}, clears: {} };
   if (!state.water.drunk) state.water.drunk = {};
   if (!state.water.sent) state.water.sent = {};
+  if (!state.water.marks) state.water.marks = {};
+  if (!state.water.clears) state.water.clears = {};
+}
+
+function setGlass(date, index, on) {
+  ensureWater();
+  state.water.marks[date] = state.water.marks[date] || {};
+  state.water.clears[date] = state.water.clears[date] || {};
+  if (on) state.water.marks[date][index] = Date.now();
+  else state.water.clears[date][index] = Date.now();
+  applyWaterMarks(state.water);
 }
 
 function mlPerKg(age) {
@@ -802,7 +863,7 @@ function waterHTML() {
       '<label class="small">Último aviso<input id="water-to" type="time" value="' + esc(state.water.to) + '"></label>' +
     "</div>" +
     remind +
-    '<p class="small muted">' + nextLine + " Cada aviso é um copo de " + plan.glass + " ml. Com o app aberto, o aviso chega na hora. No Android ele também pode chegar com o app fechado, se o sistema deixar. Estimativa, não é receita médica.</p>" +
+    '<p class="small muted">' + nextLine + " Cada aviso é um copo de " + plan.glass + " ml. No aviso, toque em Bebi para marcar esse copo sem abrir o app. Se o botão não aparecer, puxe o aviso para baixo. Estimativa, não é receita médica.</p>" +
   "</section>";
 }
 
@@ -812,25 +873,28 @@ function paintWater() {
   current.outerHTML = waterHTML();
 }
 
-function showWaterNotice(body) {
-  var options = {
-    body: body,
+function waterNoticeOptions(date, index, plan) {
+  var number = index + 1;
+  return {
+    body: "Copo " + number + " de " + plan.count + ". " + plan.glass + " ml. Toque em Bebi para marcar.",
     icon: "icons/icon-192.png",
     badge: "icons/favicon-32.png",
     tag: "agua",
     renotify: true,
     lang: "pt-BR",
-    data: { url: "./" }
+    actions: [{ action: "bebido", title: "Bebi" }],
+    data: { date: date, index: index, count: plan.count, glass: plan.glass }
   };
+}
+
+function showWaterNotice(date, index, plan) {
+  var options = waterNoticeOptions(date, index, plan);
   if (navigator.serviceWorker && navigator.serviceWorker.ready) {
     navigator.serviceWorker.ready.then(function (reg) {
       return reg.showNotification("Hora da água", options);
-    }).catch(function () {
-      if (typeof Notification !== "undefined" && Notification.permission === "granted") new Notification("Hora da água", options);
-    });
+    }).catch(function () {});
     return;
   }
-  if (typeof Notification !== "undefined" && Notification.permission === "granted") new Notification("Hora da água", options);
 }
 
 function updateWaterBadge(plan, date) {
@@ -845,14 +909,10 @@ function scheduleSystemWater(date, plan) {
   navigator.serviceWorker.ready.then(function (reg) {
     waterSlots(date, plan).forEach(function (slot) {
       if (slot.at <= Date.now()) return;
-      reg.showNotification("Hora da água", {
-        body: "Beba " + plan.glass + " ml. Meta de hoje: " + fmtL(plan.total) + ".",
-        icon: "icons/icon-192.png",
-        badge: "icons/favicon-32.png",
-        tag: "agua-" + date + "-" + slot.index,
-        showTrigger: new TimestampTrigger(slot.at),
-        data: { url: "./" }
-      }).catch(function () {});
+      var options = waterNoticeOptions(date, slot.index, plan);
+      options.tag = "agua-" + date + "-" + slot.index;
+      options.showTrigger = new TimestampTrigger(slot.at);
+      reg.showNotification("Hora da água", options).catch(function () {});
     });
   }).catch(function () {});
 }
@@ -882,8 +942,7 @@ function armWater() {
     }
   });
   if (due) {
-    var done = list.filter(Boolean).length;
-    showWaterNotice("Beba " + plan.glass + " ml. Hoje: " + fmtL(done * plan.glass) + " de " + fmtL(plan.total) + ".");
+    showWaterNotice(date, due.index, plan);
   }
   if (changed) save();
   var upcoming = null;
@@ -1421,7 +1480,7 @@ function onClick(event) {
     if (!plan) return;
     var list = drunkList(waterDate, plan.count);
     var glassIndex = Number(button.getAttribute("data-index"));
-    list[glassIndex] = !list[glassIndex];
+    setGlass(waterDate, glassIndex, !list[glassIndex]);
     save();
     paintWater();
     updateWaterBadge(plan, waterDate);
@@ -1444,6 +1503,7 @@ function onClick(event) {
   if (act === "reset") {
     if (!confirm("Apagar o perfil, os treinos e os pesos salvos neste celular?")) return;
     localStorage.removeItem(KEY);
+    if (window.indexedDB) deleteWaterRecord();
     state = blank();
     focusIso = null;
     timer.phase = "idle";
@@ -1481,7 +1541,7 @@ sheet.addEventListener("click", function (event) {
 
 document.addEventListener("visibilitychange", function () {
   if (document.visibilityState === "visible" && timer.phase === "run") lockScreen();
-  if (document.visibilityState === "visible") armWater();
+  if (document.visibilityState === "visible") pullWaterMirror().then(function () { armWater(); });
 });
 
 setInterval(tick, 200);
@@ -1492,7 +1552,9 @@ if ("serviceWorker" in navigator && location.protocol.indexOf("http") === 0) {
 
 if (navigator.serviceWorker) {
   navigator.serviceWorker.addEventListener("message", function (event) {
-    if (event.data && event.data.type === "water-check") armWater();
+    if (!event.data) return;
+    if (event.data.type === "water-check") armWater();
+    if (event.data.type === "water-sync") pullWaterMirror();
   });
 }
 
@@ -1507,4 +1569,4 @@ if (window.MutationObserver) {
 }
 
 render();
-armWater();
+pullWaterMirror().then(function () { armWater(); });
