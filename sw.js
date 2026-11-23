@@ -1,6 +1,6 @@
 importScripts("js/water-db.js");
 
-var CACHE = "op30-v9";
+var CACHE = "op30-v10";
 var FILES = [
   "./",
   "./index.html",
@@ -78,6 +78,55 @@ function markGlassFromNotification(data) {
     });
   });
 }
+
+function deliverWaterPush(payload) {
+  var data = payload.data || {};
+  var date = data.date;
+  var index = Number(data.index);
+  return readWaterRecord().then(function (stored) {
+    var water = stored || { on: true, from: "08:00", to: "21:00", drunk: {}, sent: {}, marks: {}, clears: {} };
+    if (!water.sent) water.sent = {};
+    if (!water.marks) water.marks = {};
+    if (!water.clears) water.clears = {};
+    if (!water.drunk) water.drunk = {};
+    applyWaterMarks(water);
+    var drunk = (water.drunk && date && water.drunk[date]) || [];
+    if (date && Number.isFinite(index) && index >= 0 && drunk[index]) return;
+    if (date && Number.isFinite(index) && index >= 0) {
+      water.sent[date] = water.sent[date] || {};
+      water.sent[date][index] = true;
+    }
+    return writeWaterRecord(water).then(function () {
+      return self.registration.showNotification(payload.title || "Hora da água", {
+        body: payload.body || "Hora de beber água.",
+        icon: "icons/icon-192.png",
+        badge: "icons/favicon-32.png",
+        tag: "agua",
+        renotify: true,
+        lang: "pt-BR",
+        vibrate: [180, 80, 180],
+        actions: [{ action: "bebido", title: "Bebi" }],
+        data: data
+      });
+    }).then(function () {
+      return self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (clients) {
+        clients.forEach(function (client) {
+          client.postMessage({ type: "water-sync" });
+        });
+      });
+    });
+  });
+}
+
+self.addEventListener("push", function (event) {
+  var payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch (error) {
+    payload = {};
+  }
+  event.waitUntil(deliverWaterPush(payload));
+});
 
 self.addEventListener("notificationclick", function (event) {
   var data = event.notification.data || {};

@@ -30,7 +30,7 @@ function blank() {
     measures: { start: {}, end: {} },
     checks: {},
     sound: true,
-    water: { on: false, from: "08:00", to: "21:00", drunk: {}, sent: {}, marks: {}, clears: {} }
+    water: { on: false, from: "08:00", to: "21:00", drunk: {}, sent: {}, marks: {}, clears: {}, pushOk: false }
   };
 }
 
@@ -54,7 +54,8 @@ function load() {
       drunk: (raw.water && raw.water.drunk) || {},
       sent: (raw.water && raw.water.sent) || {},
       marks: (raw.water && raw.water.marks) || {},
-      clears: (raw.water && raw.water.clears) || {}
+      clears: (raw.water && raw.water.clears) || {},
+      pushOk: !!(raw.water && raw.water.pushOk)
     };
     applyWaterMarks(base.water);
     Object.keys(base.weights).forEach(function (id) {
@@ -81,6 +82,7 @@ function writeLocal() {
 function save() {
   writeLocal();
   mirrorWater();
+  queueWaterSync();
 }
 
 function mirrorWater() {
@@ -863,8 +865,37 @@ function waterHTML() {
       '<label class="small">Último aviso<input id="water-to" type="time" value="' + esc(state.water.to) + '"></label>' +
     "</div>" +
     remind +
-    '<p class="small muted">' + nextLine + " Cada aviso é um copo de " + plan.glass + " ml. No aviso, toque em Bebi para marcar esse copo sem abrir o app. Se o botão não aparecer, puxe o aviso para baixo. Estimativa, não é receita médica.</p>" +
+    '<p class="small muted" id="water-note">' + esc(waterNoteText(nextLine, plan)) + "</p>" +
   "</section>";
+}
+
+function waterNoteText(nextLine, plan) {
+  var closed = waterPushReady === "fail"
+    ? "Não consegui registrar o celular para avisar com o app fechado. Feche e abra de novo com internet."
+    : "O aviso também chega com o app fechado. O celular precisa de internet e pode atrasar alguns minutos.";
+  return nextLine + " Cada aviso é um copo de " + plan.glass + " ml. No aviso, toque em Bebi para marcar esse copo sem abrir o app. Se o botão não aparecer, puxe o aviso para baixo. " + closed + " Estimativa, não é receita médica.";
+}
+
+function refreshWaterNote() {
+  var note = document.getElementById("water-note");
+  if (!note) return;
+  var date = todayIso();
+  var plan = waterPlan(date);
+  if (!plan) return;
+  var list = drunkList(date, plan.count);
+  var slots = waterSlots(date, plan);
+  var next = null;
+  for (var i = 0; i < slots.length; i += 1) {
+    if (!list[slots[i].index] && slots[i].at >= Date.now() - 60000) {
+      next = slots[i];
+      break;
+    }
+  }
+  var done = list.filter(Boolean).length;
+  var nextLine = next
+    ? "Próximo copo às " + fmtHM(next.at) + "."
+    : (done >= plan.count ? "Meta de hoje fechada." : "Os horários de hoje já passaram.");
+  note.textContent = waterNoteText(nextLine, plan);
 }
 
 function paintWater() {
@@ -918,6 +949,94 @@ function scheduleSystemWater(date, plan) {
 }
 
 var waterTimer = null;
+var waterSyncTimer = null;
+var waterPushReady = "";
+
+function urlBase64ToUint8Array(base64String) {
+  var padding = "=".repeat((4 - base64String.length % 4) % 4);
+  var base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  var raw = atob(base64);
+  var output = new Uint8Array(raw.length);
+  for (var i = 0; i < raw.length; i += 1) output[i] = raw.charCodeAt(i);
+  return output;
+}
+
+function queueWaterSync() {
+  if (!state.profile || !state.water) return;
+  if (waterSyncTimer) clearTimeout(waterSyncTimer);
+  waterSyncTimer = setTimeout(syncWaterPush, 1200);
+}
+
+function syncWaterPush() {
+  var profile = state.profile;
+  var water = state.water;
+  if (!profile || !water || !navigator.serviceWorker) return Promise.resolve();
+  var on = !!water.on;
+  var from = water.from;
+  var to = water.to;
+  var latest = on ? lastWeight() : null;
+  var kg = latest ? latest.kg : null;
+  var age = profile.age;
+  var tz = new Date().getTimezoneOffset();
+  var drunk = {};
+  if (on && water.drunk) {
+    [todayIso(), iso(addDays(new Date(), -1))].forEach(function (date) {
+      if (Array.isArray(water.drunk[date])) drunk[date] = water.drunk[date].slice();
+    });
+  }
+  return navigator.serviceWorker.ready.then(function (reg) {
+    if (!on) {
+      return reg.pushManager.getSubscription().then(function (sub) {
+        if (!sub) return { ok: true };
+        return fetch("/.netlify/functions/water-sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ on: false, subscription: sub.toJSON() })
+        }).then(function (res) { return { ok: res.ok }; });
+      });
+    }
+    if (typeof Notification === "undefined" || Notification.permission !== "granted" || !kg) return { ok: false };
+    return fetch("/.netlify/functions/water-key", { cache: "no-store" }).then(function (res) {
+      if (!res.ok) throw new Error("chave");
+      return res.json();
+    }).then(function (body) {
+      if (!body || !body.publicKey) throw new Error("chave");
+      var appKey = urlBase64ToUint8Array(body.publicKey);
+      return reg.pushManager.getSubscription().then(function (existing) {
+        if (existing) return existing;
+        return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: appKey });
+      });
+    }).then(function (sub) {
+      return fetch("/.netlify/functions/water-sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          on: true,
+          subscription: sub.toJSON(),
+          from: from,
+          to: to,
+          tzOffsetMinutes: tz,
+          kg: kg,
+          age: age,
+          drunk: drunk
+        })
+      });
+    }).then(function (res) { return { ok: !!(res && res.ok) }; });
+  }).then(function (result) {
+    if (!state.water) return;
+    if (on && result && result.ok) {
+      state.water.pushOk = true;
+      waterPushReady = "on";
+      writeLocal();
+    } else if (on && !state.water.pushOk) {
+      waterPushReady = "fail";
+    }
+    refreshWaterNote();
+  }).catch(function () {
+    if (on && state.water && !state.water.pushOk) waterPushReady = "fail";
+    refreshWaterNote();
+  });
+}
 
 function armWater() {
   if (waterTimer) clearTimeout(waterTimer);
@@ -1502,6 +1621,9 @@ function onClick(event) {
   }
   if (act === "reset") {
     if (!confirm("Apagar o perfil, os treinos e os pesos salvos neste celular?")) return;
+    if (waterSyncTimer) clearTimeout(waterSyncTimer);
+    if (state.water) state.water.on = false;
+    syncWaterPush();
     localStorage.removeItem(KEY);
     if (window.indexedDB) deleteWaterRecord();
     state = blank();
@@ -1547,6 +1669,12 @@ document.addEventListener("visibilitychange", function () {
 setInterval(tick, 200);
 
 if ("serviceWorker" in navigator && location.protocol.indexOf("http") === 0) {
+  var refreshing = false;
+  navigator.serviceWorker.addEventListener("controllerchange", function () {
+    if (refreshing) return;
+    refreshing = true;
+    window.location.reload();
+  });
   navigator.serviceWorker.register("sw.js").catch(function () {});
 }
 
@@ -1569,4 +1697,7 @@ if (window.MutationObserver) {
 }
 
 render();
-pullWaterMirror().then(function () { armWater(); });
+pullWaterMirror().then(function () {
+  armWater();
+  queueWaterSync();
+});
